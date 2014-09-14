@@ -1,25 +1,190 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
+title: 'Reproducible Research: Peer Assessment 1'
+author: "Sherri Verdugo"
+date: "September 12, 2014"
+output:
   html_document:
-    keep_md: true
+    highlight: espresso
+    theme: cosmo
+    toc: yes
+    toc_depth: 3
+  pdf_document:
+    highlight: espresso
+    toc: yes
+    toc_depth: 3
+  word_document: default
 ---
 
 
-## Loading and preprocessing the data
+## Loading and processing the data
+The following libraries are needed for this project:
+```{r libraries, results='markup', eval=TRUE, echo=TRUE, warning=FALSE}
+library(ggplot2)#needed for plots
+library(xtable)#needed for pretty table
+```
 
+### 1: Load in the data
 
+```{r loaddata, results='markup', eval=TRUE, echo=TRUE}
+df.1 <- read.csv("activity.csv")
+```
+
+### Check the first 5 rows of the data before processing the data for the project.
+
+This step allows us to evaluate the first five initial rows of data in the df.1 data set.
+
+```{r checkdata, results='asis', eval=TRUE, echo=TRUE}
+h.noproc <- head(df.1, 5)
+h.noproc <- xtable(h.noproc, caption="First 5 rows: non-processed", label="Head Xtable", digits=1)
+print(h.noproc, include.rownames = TRUE, caption.placement="top")
+```
+
+### Initial Process and Removing the NA's in the data. 
+
+This step allows us to evalute the first five initial rows of data in the df data set after removing na. values.
+
+```{r naremove, results='asis', eval=TRUE, echo=TRUE}
+
+df <- na.omit(df.1)
+h.proc <- head(df, 5)
+h.proc <- xtable(h.proc, caption="First 5 rows: processed", label="HeadP Xtable", digits=1)
+print(h.proc, include.rownames = TRUE, caption.placement="top")
+```
 
 ## What is mean total number of steps taken per day?
 
+We have a few steps to take here. First, I like to plot the data. This time we are using qplot from the ggplot2 library. Make sure you have that installed. If you do not have it, be sure to use install.packages("ggplot2"). Out of curiosity, the histogram plot was tried two times to find the better plotting function as shown below.
 
+### Histogram of the total number of steps taken each day
+
+```{r hist_steps, results='markup', echo=TRUE, eval=TRUE, warning=FALSE}
+
+df.steps <- aggregate(steps ~ date, df, sum)
+##Raw Histogram
+hist(df.steps$steps, col="lightblue", main = "Histogram of Total # Steps Taken Each Day", 
+     xlab="Total Number of Steps in a Day")
+##New Bins set
+qplot(steps, data=df.steps, binwidth = "1", xlab = "Total number of steps taken each day", 
+      main = "Steps with binwidth set at 1", na.rm=TRUE) + 
+      geom_histogram(colour="darkgreen", aes(fill = ..count..)) 
+```
+
+The overall shape of the histogram slightly changes when the binwidth is set at 1.  
+
+
+### Mean total number of steps per day
+
+The next step is to find two measures of central tendency: the mean total number of steps per day and the median number of steps per day.
+
+```{r mean_median, results='asis', echo=TRUE, eval=TRUE, warning=FALSE}
+mean(df.steps$steps)
+median(df.steps$steps)
+
+desc <- summary(df.steps) #from the psych library
+desc <- xtable(desc, caption="Summary Statistics for Data", 
+               label="Description Xtable", digits=1)
+print(desc, include.rownames = TRUE, caption.placement="top")
+```
+  
+The summary function was ran to double check the two values of central tendency that we are interested in: the median and the mean.  
 
 ## What is the average daily activity pattern?
 
+This time, we are looking at the average daily activity pattern. This means that we have to aggregate and then plot. Again, we are using the library (ggplot2)...make sure you have that installed.
 
+```{r average_steps, results='markup', echo=TRUE, eval=TRUE}
+library(ggplot2)
+df.averages <- aggregate(x=list(steps=df$steps), by=list(interval=df$interval), FUN=mean)
+ggplot(data=df.averages, aes(x=interval, y=steps)) + geom_line() + 
+  xlab("Intervals set at 5 minutes") + ylab("Average of steps taken")
+```
+
+Further, on average for all days in the dataset df, the 5 minute intervals contains the following maximum number of steps:
+```{r average_steps2, results='markup', echo=TRUE, eval=TRUE}
+df.averages[which.max(df.averages$steps),]
+```
 
 ## Imputing missing values
 
+This dataset has many missing values that are coded as NA. The very presence of the missing data may introduce what is known as bias into the data analysis process. We need to take care to address this and carefully impute the data using r. First we identify the number of missing items from the dataframe. Finally, we generate a table to identify the number of missing items in this dataset.
 
+```{r missing_data, results='markup', echo=TRUE, eval=TRUE}
+df.missing <- is.na(df$steps)
+num.missing <- sum(df.missing)
+table(df.missing)
+table (num.missing)
+```
+
+We can replace the missing values with the mean value of the 5-minute intervals by using a function that is conditional on the is.na and number of steps. This was tricky as it took more time to run through various options of how to do this. 
+
+
+```{r nafiller, results='markup', echo=TRUE, eval=TRUE}
+nafiller <- function(steps, interval){
+  filler <- NA
+  if (!is.na(steps))
+    filler <- c(steps)
+  else
+    filler <- (df.averages[df.averages$interval==interval, "steps"])
+  return(filler)
+}
+myfill.df <- df
+myfill.df$steps <- mapply(nafiller, myfill.df$steps, myfill.df$interval)
+```
+
+Now we can look at what we have done so far by calling the object.
+
+```{r filler_head, results='markup', echo=TRUE, eval=TRUE}
+head(myfill.df)
+```
+
+The next thing we can do is utilize the histogram for visualization with the filled in data set. 
+
+```{r fill_hist, results='markup', eval=TRUE, echo=TRUE}
+myts <- tapply(myfill.df$steps, myfill.df$date)
+
+
+qplot(myts, binwidth=5, xlab="Total Number of Steps per Day",
+      main="Total Number of Steps per Day After Imputation" )
+
+
+library(psych)
+describe(myts)
+mean(myts)
+median(myts)
+summary(myts)
+```
+
+From the imputation process, we notice that the mean and median values are higher. One explanation is that in the original data with some days that have 'steps' with the value of NA for any 'interval'. That means that the number of steps would have 0 values that are removed in the original histogram. After the imputation, the values of the mean and median increase.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+To do this step, we have to look at the day of the week for every single measurement in the data that we are analyzing. We will continue using our filled data (myfill.df) for the next portion of this assignment.
+
+```{r myfill, results='markup', echo=TRUE, eval=TRUE}
+week.identify <- function(date){
+ day <- weekdays(date)
+ if (day %in% c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"))
+   return("Weekday")
+ else if (day %in% c("Saturday", "Sunday"))
+   return("Weekend")
+ else
+   stop("Invalid Date")
+}  
+myfill.df$date <- as.Date(myfill.df$date)
+myfill.df$day <- sapply(myfill.df$date, FUN=week.identify)
+```
+
+Let's look at what we have so far for identifying the day of the week as a weekend or weekday. Is R smart enough to handle that? The answer is, yes.
+
+```{r myfill_head, results='markup', echo=TRUE, eval=TRUE}
+head(myfill.df$day)
+```
+
+The next step for this is to visually explore the data that we created. The option that is used is the panel plot that contains the average number of steps taken on either weekends or weekdays. Do people take more steps on the weekends or the weekdays?
+
+```{r agg_steps, results='markup', eval=TRUE, echo=TRUE}
+avg <- aggregate(steps ~ interval + day, data=myfill.df, mean)
+ggplot(avg, aes(interval, steps))+geom_line()+ facet_grid(day ~ .) + xlab("Intervals at 5 minutes") + ylab("# of Steps")
+```
+
+From the graph we see that weekday steps start out similar to the weekend steps. The difference is that more regular paterns occur in the weekend steps perhaps because people have time to dedicate to the steps versus obligations that they have during the weekdays.
